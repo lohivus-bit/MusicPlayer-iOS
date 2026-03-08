@@ -1,7 +1,8 @@
 import SwiftUI
 
-struct ContentView: View {
-    @StateObject private var vm = AudioPlayerViewModel()
+// MARK: - Music View (главный экран с музыкой)
+struct MusicView: View {
+    @ObservedObject var vm: AudioPlayerViewModel
 
     var body: some View {
         ZStack {
@@ -15,7 +16,7 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 // Заголовок
-                HeaderView()
+                MusicHeaderView()
 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -26,28 +27,27 @@ struct ContentView: View {
                         TrackListView(vm: vm)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 90) // Отступ под таб-бар
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
 // MARK: - Header
-struct HeaderView: View {
+struct MusicHeaderView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("My Music")
+                Text("Музыка")
                     .font(.system(size: 28, weight: .heavy))
                     .foregroundColor(.white)
-                Text("\(sampleTracks.count) tracks")
+                Text("\(sampleTracks.count) треков")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
             }
             Spacer()
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(10)
@@ -332,11 +332,11 @@ struct TrackListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Up Next")
+                Text("Далее")
                     .font(.system(size: 16, weight: .heavy))
                     .foregroundColor(.white)
                 Spacer()
-                Text("See all")
+                Text("Все")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.purple)
             }
@@ -446,5 +446,5 @@ extension Color {
 }
 
 #Preview {
-    ContentView()
+    MainTabView()
 }
