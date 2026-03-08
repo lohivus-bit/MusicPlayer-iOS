@@ -1,0 +1,43 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+    - name: Build IPA
+      run: |
+        xcodebuild \
+          -project MusicPlayer.xcodeproj \
+          -scheme MusicPlayer \
+          -sdk iphoneos \
+          -configuration Release \
+          -derivedDataPath build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          build
+
+    - name: Package IPA
+      run: |
+        mkdir -p Payload
+        cp -r build/Build/Products/Release-iphoneos/MusicPlayer.app Payload/
+        zip -r MusicPlayer.ipa Payload/
+
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: MusicPlayer-IPA
+        path: MusicPlayer.ipa
+        retention-days: 30
