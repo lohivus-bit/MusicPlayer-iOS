@@ -1,5 +1,10 @@
 import SwiftUI
 
+// MARK: - Theme Manager
+class ThemeManager: ObservableObject {
+    @AppStorage("isDarkMode") var isDarkMode: Bool = true
+}
+
 enum Tab: Int, CaseIterable {
     case music
     case browser
@@ -33,6 +38,7 @@ enum Tab: Int, CaseIterable {
 struct MainTabView: View {
     @State private var selectedTab: Tab = .music
     @StateObject private var vm = AudioPlayerViewModel()
+    @StateObject private var theme = ThemeManager()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -44,80 +50,72 @@ struct MainTabView: View {
                 case .browser:
                     BrowserView()
                 case .settings:
-                    SettingsView()
+                    SettingsView(theme: theme)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Кастомный таб-бар
-            CustomTabBar(selectedTab: $selectedTab)
+            // Плавающий таб-бар в стиле Telegram
+            FloatingTabBar(selectedTab: $selectedTab)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
         }
         .ignoresSafeArea(.keyboard)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(theme.isDarkMode ? .dark : .light)
+        .environmentObject(theme)
     }
 }
 
-// MARK: - Custom Tab Bar
-struct CustomTabBar: View {
+// MARK: - Floating Tab Bar (Telegram-style)
+struct FloatingTabBar: View {
     @Binding var selectedTab: Tab
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases, id: \.rawValue) { tab in
-                TabBarButton(tab: tab, isSelected: selectedTab == tab) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                FloatingTabButton(tab: tab, isSelected: selectedTab == tab) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         selectedTab = tab
                     }
                 }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 10)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            TabBarBackground()
+            Capsule()
+                .fill(Color(hex: "#1C1C1E"))
+                .shadow(color: .black.opacity(0.4), radius: 16, y: 4)
         )
     }
 }
 
-struct TabBarButton: View {
+struct FloatingTabButton: View {
     let tab: Tab
     let isSelected: Bool
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 4) {
-                Image(systemName: isSelected ? tab.iconFilled : tab.icon)
-                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .purple : .white.opacity(0.45))
-                    .scaleEffect(isSelected ? 1.1 : 1.0)
+            VStack(spacing: 3) {
+                ZStack {
+                    // Круг-подсветка для активного таба
+                    Circle()
+                        .fill(Color.white.opacity(isSelected ? 0.12 : 0))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: isSelected ? tab.iconFilled : tab.icon)
+                        .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(isSelected ? .white : .gray)
+                }
 
                 Text(tab.title)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? .purple : .white.opacity(0.45))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .white : .gray)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
         }
         .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct TabBarBackground: View {
-    var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .environment(\.colorScheme, .dark)
-            .overlay(
-                Rectangle()
-                    .fill(Color.black.opacity(0.3))
-            )
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 0.5)
-            }
     }
 }
 

@@ -25,19 +25,19 @@ struct BrowserView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.gray)
 
                     TextField("Поиск или URL", text: $searchText)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
-                        .tint(.purple)
+                        .tint(.white)
                         .focused($isSearchFocused)
 
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(.gray)
                         }
                     }
                 }
@@ -45,10 +45,10 @@ struct BrowserView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(0.06))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(isSearchFocused ? Color.purple.opacity(0.5) : Color.white.opacity(0.06), lineWidth: 1)
+                                .stroke(isSearchFocused ? Color.white.opacity(0.2) : Color.white.opacity(0.06), lineWidth: 1)
                         )
                 )
                 .padding(.horizontal, 20)
@@ -58,7 +58,7 @@ struct BrowserView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Быстрые ссылки")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.gray)
                         .padding(.horizontal, 24)
 
                     LazyVGrid(columns: [
@@ -67,10 +67,10 @@ struct BrowserView: View {
                         GridItem(.flexible(), spacing: 16),
                         GridItem(.flexible(), spacing: 16)
                     ], spacing: 20) {
-                        QuickLinkItem(icon: "play.circle.fill", title: "YouTube", color: "#FF0000")
-                        QuickLinkItem(icon: "music.note.house.fill", title: "Spotify", color: "#1DB954")
-                        QuickLinkItem(icon: "cloud.fill", title: "SoundCloud", color: "#FF5500")
-                        QuickLinkItem(icon: "headphones", title: "Deezer", color: "#A238FF")
+                        QuickLinkItem(icon: "play.circle.fill", title: "YouTube", color: "#8E8E93")
+                        QuickLinkItem(icon: "music.note.house.fill", title: "Spotify", color: "#8E8E93")
+                        QuickLinkItem(icon: "cloud.fill", title: "SoundCloud", color: "#8E8E93")
+                        QuickLinkItem(icon: "headphones", title: "Deezer", color: "#8E8E93")
                     }
                     .padding(.horizontal, 20)
                 }
@@ -81,10 +81,10 @@ struct BrowserView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "globe")
                         .font(.system(size: 48, weight: .thin))
-                        .foregroundColor(.white.opacity(0.15))
+                        .foregroundColor(.white.opacity(0.1))
                     Text("Поиск музыки в интернете")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.25))
+                        .foregroundColor(.gray.opacity(0.5))
                 }
 
                 Spacer()
@@ -103,7 +103,7 @@ struct QuickLinkItem: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(hex: color).opacity(0.15))
+                        .fill(Color.white.opacity(0.06))
                         .frame(width: 56, height: 56)
 
                     Image(systemName: icon)
@@ -113,7 +113,7 @@ struct QuickLinkItem: View {
 
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.gray)
                     .lineLimit(1)
             }
         }

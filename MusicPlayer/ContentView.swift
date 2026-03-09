@@ -8,11 +8,10 @@ struct MusicView: View {
         ZStack {
             // Фон
             LinearGradient(
-                colors: [Color(hex: vm.currentTrack.colorHex).opacity(0.6), Color.black],
+                colors: [Color(hex: "#2C2C2E").opacity(0.8), Color.black],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: vm.currentTrackIndex)
 
             VStack(spacing: 0) {
                 // Заголовок
@@ -27,7 +26,7 @@ struct MusicView: View {
                         TrackListView(vm: vm)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 90) // Отступ под таб-бар
+                    .padding(.bottom, 100) // Отступ под таб-бар
                 }
             }
         }
@@ -44,14 +43,14 @@ struct MusicHeaderView: View {
                     .foregroundColor(.white)
                 Text("\(sampleTracks.count) треков")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.gray)
             }
             Spacer()
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(10)
-                .background(Color.white.opacity(0.1))
+                .background(Color.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 20)
@@ -72,7 +71,7 @@ struct NowPlayingCard: View {
                 Text("NOW PLAYING")
                     .font(.system(size: 9, weight: .bold))
                     .kerning(2)
-                    .foregroundColor(.purple.opacity(0.7))
+                    .foregroundColor(.gray)
             }
             .padding(.bottom, 4)
 
@@ -88,13 +87,13 @@ struct NowPlayingCard: View {
                         .foregroundColor(.white)
                     Text(vm.currentTrack.artist)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.gray)
                 }
                 Spacer()
                 Button(action: { vm.toggleLike() }) {
                     Image(systemName: vm.isCurrentTrackLiked ? "heart.fill" : "heart")
                         .font(.system(size: 22))
-                        .foregroundColor(vm.isCurrentTrackLiked ? .red : .white.opacity(0.4))
+                        .foregroundColor(vm.isCurrentTrackLiked ? .red : .gray.opacity(0.5))
                         .scaleEffect(vm.isCurrentTrackLiked ? 1.2 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.5), value: vm.isCurrentTrackLiked)
                 }
@@ -115,10 +114,10 @@ struct NowPlayingCard: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white.opacity(0.07))
+                .fill(Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
     }
@@ -136,13 +135,13 @@ struct AlbumArtView: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: track.colorHex), Color(hex: track.colorHex).opacity(0.4)],
+                        colors: [Color(hex: "#3A3A3C"), Color(hex: "#1C1C1E")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .shadow(color: Color(hex: track.colorHex).opacity(0.5), radius: 20, y: 10)
+                .shadow(color: Color.black.opacity(0.5), radius: 20, y: 10)
 
             // Виниловая пластинка
             ZStack {
@@ -159,7 +158,7 @@ struct AlbumArtView: View {
 
                 // Центр
                 Circle()
-                    .fill(Color(hex: track.colorHex))
+                    .fill(Color(hex: "#48484A"))
                     .frame(width: 16, height: 16)
             }
             .rotationEffect(.degrees(rotation))
@@ -194,19 +193,17 @@ struct ProgressBarView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.12))
+                        .fill(Color.white.opacity(0.1))
                         .frame(height: 4)
                     Capsule()
-                        .fill(
-                            LinearGradient(colors: [.purple, .pink], startPoint: .leading, endPoint: .trailing)
-                        )
+                        .fill(Color.white.opacity(0.8))
                         .frame(width: geo.size.width * vm.progress, height: 4)
                     // Thumb
                     Circle()
                         .fill(Color.white)
                         .frame(width: 12, height: 12)
                         .offset(x: max(0, geo.size.width * vm.progress - 6))
-                        .shadow(color: .purple, radius: 4)
+                        .shadow(color: .black.opacity(0.3), radius: 4)
                 }
             }
             .frame(height: 12)
@@ -225,7 +222,7 @@ struct ProgressBarView: View {
                 Text(vm.formattedTime(vm.duration))
             }
             .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white.opacity(0.45))
+            .foregroundColor(.gray)
         }
     }
 }
@@ -240,7 +237,7 @@ struct ControlsView: View {
             Button(action: { vm.isShuffle.toggle() }) {
                 Image(systemName: "shuffle")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(vm.isShuffle ? .purple : .white.opacity(0.4))
+                    .foregroundColor(vm.isShuffle ? .white : .gray.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
 
@@ -257,10 +254,14 @@ struct ControlsView: View {
                 ZStack {
                     Circle()
                         .fill(
-                            LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(colors: [Color(hex: "#3A3A3C"), Color(hex: "#2C2C2E")], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 66, height: 66)
-                        .shadow(color: .purple.opacity(0.6), radius: 14, y: 6)
+                        .shadow(color: .black.opacity(0.5), radius: 14, y: 6)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        )
 
                     Image(systemName: vm.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 26, weight: .medium))
@@ -284,7 +285,7 @@ struct ControlsView: View {
             Button(action: { vm.isRepeat.toggle() }) {
                 Image(systemName: "repeat")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(vm.isRepeat ? .purple : .white.opacity(0.4))
+                    .foregroundColor(vm.isRepeat ? .white : .gray.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
         }
@@ -299,13 +300,13 @@ struct VolumeView: View {
         HStack(spacing: 10) {
             Image(systemName: "speaker.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(.gray.opacity(0.6))
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.1)).frame(height: 3)
+                    Capsule().fill(Color.white.opacity(0.08)).frame(height: 3)
                     Capsule()
-                        .fill(LinearGradient(colors: [.purple, .pink], startPoint: .leading, endPoint: .trailing))
+                        .fill(Color.white.opacity(0.7))
                         .frame(width: geo.size.width * CGFloat(vm.volume), height: 3)
                 }
                 .gesture(
@@ -320,7 +321,7 @@ struct VolumeView: View {
 
             Image(systemName: "speaker.wave.3.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(.gray.opacity(0.6))
         }
     }
 }
@@ -338,7 +339,7 @@ struct TrackListView: View {
                 Spacer()
                 Text("Все")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.purple)
+                    .foregroundColor(.gray)
             }
             .padding(.horizontal, 4)
 
@@ -370,7 +371,7 @@ struct TrackRow: View {
                 // Мини-обложка
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: track.colorHex).opacity(0.6))
+                        .fill(Color(hex: "#2C2C2E"))
                     Text(track.emoji).font(.system(size: 20))
                 }
                 .frame(width: 46, height: 46)
@@ -379,10 +380,10 @@ struct TrackRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(track.title)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(isActive ? .purple : .white)
+                        .foregroundColor(isActive ? .white : .white.opacity(0.8))
                     Text(track.artist)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundColor(.gray)
                 }
                 Spacer()
 
@@ -392,7 +393,7 @@ struct TrackRow: View {
                 } else {
                     Text("\(index + 1)")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(.gray.opacity(0.5))
                         .frame(width: 20)
                 }
             }
@@ -400,7 +401,7 @@ struct TrackRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isActive ? Color.purple.opacity(0.12) : Color.clear)
+                    .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -415,7 +416,7 @@ struct EqualizerView: View {
         HStack(alignment: .bottom, spacing: 2) {
             ForEach(0..<3) { i in
                 Capsule()
-                    .fill(Color.purple)
+                    .fill(Color.white)
                     .frame(width: 3, height: heights[i])
                     .animation(
                         .easeInOut(duration: 0.4)
