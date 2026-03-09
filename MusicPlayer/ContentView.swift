@@ -401,14 +401,11 @@ struct FullPlayerView: View {
                         .kerning(2)
                         .foregroundColor(.gray)
                     Spacer()
-                    // Speed indicator
-                    if vm.playbackRate != 1.0 {
-                        Text(String(format: "%.1fx", vm.playbackRate))
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(Color(hex: "#5856D6"))
-                    } else {
-                        Color.clear.frame(width: 30)
-                    }
+                    // Speed indicator - always visible
+                    Text(String(format: "%.1fx", vm.playbackRate))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color(hex: "#5856D6"))
+                        .opacity(vm.playbackRate != 1.0 ? 1.0 : 0.5)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)

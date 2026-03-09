@@ -25,29 +25,78 @@ struct Track: Identifiable, Equatable {
     // MARK: - Create Track from file URL by extracting ID3 metadata
     static func fromFile(url: URL) -> Track? {
         let asset = AVURLAsset(url: url)
-        let metadata = asset.metadata
+        
+        // Load metadata from both asset and track
+        let assetMetadata = asset.commonMetadata
+        var allMetadata = assetMetadata
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            allMetadata += audioTrack.commonMetadata
+        }
 
-        // Extract title
-        let titleItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle)
+        // Extract title - try multiple formats
+        var titleItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierTitle)
+        if titleItems.isEmpty {
+            titleItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyTitleDescription, keySpace: .id3)
+        }
+        if titleItems.isEmpty {
+            titleItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyTitle, keySpace: .iTunes)
+        }
         let title = titleItems.first?.stringValue ?? url.deletingPathExtension().lastPathComponent
 
-        // Extract artist
-        let artistItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist)
+        // Extract artist - try multiple formats
+        var artistItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierArtist)
+        if artistItems.isEmpty {
+            artistItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyLeadPerformer, keySpace: .id3)
+        }
+        if artistItems.isEmpty {
+            artistItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyArtist, keySpace: .iTunes)
+        }
         let artist = artistItems.first?.stringValue ?? "Неизвестный исполнитель"
 
-        // Extract album name
-        let albumItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierAlbumName)
+        // Extract album name - try multiple formats
+        var albumItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierAlbumName)
+        if albumItems.isEmpty {
+            albumItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyAlbumTitle, keySpace: .id3)
+        }
+        if albumItems.isEmpty {
+            albumItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyAlbum, keySpace: .iTunes)
+        }
         let albumName = albumItems.first?.stringValue ?? "Неизвестный альбом"
 
-        // Extract artwork
+        // Extract artwork - try multiple formats and methods
         var artworkData: Data? = nil
-        let artworkItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtwork)
+        
+        // Try common identifier first
+        var artworkItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierArtwork)
         if let artworkItem = artworkItems.first {
             if let data = artworkItem.dataValue {
                 artworkData = data
-            } else if let value = artworkItem.value {
-                // Some formats store artwork as NSData wrapped in value
-                if let data = value as? Data {
+            } else if let data = artworkItem.value as? Data {
+                artworkData = data
+            } else if let dict = artworkItem.value as? NSDictionary, let data = dict["data"] as? Data {
+                artworkData = data
+            }
+        }
+        
+        // Try ID3 format
+        if artworkData == nil {
+            artworkItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyAttachedPicture, keySpace: .id3)
+            if let artworkItem = artworkItems.first {
+                if let data = artworkItem.dataValue {
+                    artworkData = data
+                } else if let data = artworkItem.value as? Data {
+                    artworkData = data
+                }
+            }
+        }
+        
+        // Try iTunes format
+        if artworkData == nil {
+            artworkItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyCoverArt, keySpace: .iTunes)
+            if let artworkItem = artworkItems.first {
+                if let data = artworkItem.dataValue {
+                    artworkData = data
+                } else if let data = artworkItem.value as? Data {
                     artworkData = data
                 }
             }

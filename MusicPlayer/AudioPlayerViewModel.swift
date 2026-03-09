@@ -74,7 +74,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     private func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
             systemVolume = session.outputVolume
         } catch {
@@ -350,7 +350,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         guard let file = audioFile else { return }
 
         let wasPlaying = isPlaying
-        playerNode.stop() // Don't increment generation here — we want to reschedule
+        playerNode.stop()
 
         let clamped = max(0, min(frame, audioLengthFrames))
         seekFrame = clamped
@@ -361,6 +361,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
             return
         }
 
+        playbackGeneration += 1
         let gen = playbackGeneration
         playerNode.scheduleSegment(file, startingFrame: clamped, frameCount: remaining, at: nil) { [weak self] in
             DispatchQueue.main.async {
@@ -372,6 +373,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         if wasPlaying {
             if !audioEngine.isRunning { try? audioEngine.start() }
             playerNode.play()
+            isPlaying = true
         }
 
         currentTime = Double(clamped) / audioSampleRate
