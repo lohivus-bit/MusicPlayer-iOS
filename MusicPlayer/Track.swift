@@ -1,28 +1,77 @@
 import Foundation
+import AVFoundation
+import UIKit
 
-struct Track: Identifiable {
-    let id = UUID()
+struct Track: Identifiable, Equatable {
+    let id: UUID
     let title: String
     let artist: String
-    let fileName: String   // имя файла в папке Resources (без расширения)
-    let fileExtension: String  // расширение: "mp3", "m4a", и т.д.
-    let emoji: String
-    let colorHex: String
+    let albumName: String
+    let duration: TimeInterval
+    let artworkData: Data?
+    let fileURL: URL
 
-    // Возвращает URL файла из бандла приложения
-    var url: URL? {
-        Bundle.main.url(forResource: fileName, withExtension: fileExtension)
+    // Equatable conformance by id
+    static func == (lhs: Track, rhs: Track) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    // MARK: - Artwork as UIImage
+    var artworkImage: UIImage? {
+        guard let data = artworkData else { return nil }
+        return UIImage(data: data)
+    }
+
+    // MARK: - Create Track from file URL by extracting ID3 metadata
+    static func fromFile(url: URL) -> Track? {
+        let asset = AVURLAsset(url: url)
+        let metadata = asset.metadata
+
+        // Extract title
+        let titleItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle)
+        let title = titleItems.first?.stringValue ?? url.deletingPathExtension().lastPathComponent
+
+        // Extract artist
+        let artistItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist)
+        let artist = artistItems.first?.stringValue ?? "Неизвестный исполнитель"
+
+        // Extract album name
+        let albumItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierAlbumName)
+        let albumName = albumItems.first?.stringValue ?? "Неизвестный альбом"
+
+        // Extract artwork
+        var artworkData: Data? = nil
+        let artworkItems = AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtwork)
+        if let artworkItem = artworkItems.first {
+            if let data = artworkItem.dataValue {
+                artworkData = data
+            } else if let value = artworkItem.value {
+                // Some formats store artwork as NSData wrapped in value
+                if let data = value as? Data {
+                    artworkData = data
+                }
+            }
+        }
+
+        // Get duration
+        let duration = CMTimeGetSeconds(asset.duration)
+        let validDuration = duration.isNaN || duration.isInfinite ? 0 : duration
+
+        return Track(
+            id: UUID(),
+            title: title,
+            artist: artist,
+            albumName: albumName,
+            duration: validDuration,
+            artworkData: artworkData,
+            fileURL: url
+        )
+    }
+
+    // MARK: - Formatted duration string
+    var formattedDuration: String {
+        let mins = Int(duration) / 60
+        let secs = Int(duration) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
-
-// MARK: - Список треков
-// Чтобы добавить свою песню:
-// 1. Перетащи MP3/M4A файл в папку MusicPlayer в Xcode (поставь галку "Add to target")
-// 2. Добавь новый Track() в этот массив
-let sampleTracks: [Track] = [
-    Track(title: "Midnight Glow",  artist: "Luna Waves",   fileName: "midnight_glow",  fileExtension: "mp3", emoji: "🌙", colorHex: "#6b21a8"),
-    Track(title: "Neon Dreams",    artist: "Synthwave 84", fileName: "neon_dreams",    fileExtension: "mp3", emoji: "🌆", colorHex: "#1d4ed8"),
-    Track(title: "Golden Hour",    artist: "The Drifters", fileName: "golden_hour",    fileExtension: "mp3", emoji: "🌅", colorHex: "#b45309"),
-    Track(title: "Electric Soul",  artist: "Voltage",      fileName: "electric_soul",  fileExtension: "mp3", emoji: "⚡", colorHex: "#065f46"),
-    Track(title: "Rainy Days",     artist: "Soft Palette", fileName: "rainy_days",     fileExtension: "mp3", emoji: "🌧", colorHex: "#1e3a5f"),
-]

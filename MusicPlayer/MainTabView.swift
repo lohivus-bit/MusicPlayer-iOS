@@ -54,10 +54,18 @@ struct MainTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Плавающий таб-бар (Liquid Glass)
-            LiquidGlassTabBar(selectedTab: $selectedTab)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 6)
+            // Mini player + Tab bar stack
+            VStack(spacing: 6) {
+                // Mini player (only on non-music tabs, or always if has tracks)
+                if vm.hasTracks {
+                    MiniPlayerBar(vm: vm)
+                }
+
+                // Tab bar
+                LiquidGlassTabBar(selectedTab: $selectedTab)
+                    .padding(.horizontal, 40)
+            }
+            .padding(.bottom, 6)
         }
         .ignoresSafeArea(.keyboard)
         .preferredColorScheme(theme.isDarkMode ? .dark : .light)
@@ -127,7 +135,6 @@ struct LiquidTabButton: View {
         Button(action: onTap) {
             VStack(spacing: 2) {
                 ZStack {
-                    // Подсветка активного таба
                     if isSelected {
                         Circle()
                             .fill(
@@ -149,7 +156,7 @@ struct LiquidTabButton: View {
                         .foregroundColor(
                             isSelected
                                 ? (theme.isDarkMode ? .white : .black)
-                                : (theme.isDarkMode ? .gray : .gray)
+                                : .gray
                         )
                 }
                 .frame(height: 36)
