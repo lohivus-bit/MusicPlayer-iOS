@@ -42,7 +42,6 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Контент текущего таба
             Group {
                 switch selectedTab {
                 case .music:
@@ -55,10 +54,10 @@ struct MainTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Плавающий таб-бар в стиле Telegram
-            FloatingTabBar(selectedTab: $selectedTab)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
+            // Плавающий таб-бар (Liquid Glass)
+            LiquidGlassTabBar(selectedTab: $selectedTab)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 6)
         }
         .ignoresSafeArea(.keyboard)
         .preferredColorScheme(theme.isDarkMode ? .dark : .light)
@@ -66,52 +65,102 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Floating Tab Bar (Telegram-style)
-struct FloatingTabBar: View {
+// MARK: - Liquid Glass Tab Bar
+struct LiquidGlassTabBar: View {
     @Binding var selectedTab: Tab
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases, id: \.rawValue) { tab in
-                FloatingTabButton(tab: tab, isSelected: selectedTab == tab) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                LiquidTabButton(tab: tab, isSelected: selectedTab == tab) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         selectedTab = tab
                     }
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(hex: "#1C1C1E"))
-                .shadow(color: .black.opacity(0.4), radius: 16, y: 4)
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, theme.isDarkMode ? .dark : .light)
+                .overlay(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(theme.isDarkMode ? 0.15 : 0.6),
+                                    Color.white.opacity(theme.isDarkMode ? 0.05 : 0.3)
+                                ],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(theme.isDarkMode ? 0.3 : 0.8),
+                                    Color.white.opacity(theme.isDarkMode ? 0.08 : 0.2)
+                                ],
+                                startPoint: .top, endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.25), radius: 20, y: 8)
+                .shadow(color: .white.opacity(theme.isDarkMode ? 0.05 : 0.2), radius: 1, y: -1)
         )
     }
 }
 
-struct FloatingTabButton: View {
+struct LiquidTabButton: View {
     let tab: Tab
     let isSelected: Bool
     let onTap: () -> Void
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 ZStack {
-                    // Круг-подсветка для активного таба
-                    Circle()
-                        .fill(Color.white.opacity(isSelected ? 0.12 : 0))
-                        .frame(width: 42, height: 42)
+                    // Подсветка активного таба
+                    if isSelected {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color.white.opacity(theme.isDarkMode ? 0.2 : 0.5),
+                                        Color.white.opacity(theme.isDarkMode ? 0.06 : 0.15)
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 20
+                                )
+                            )
+                            .frame(width: 36, height: 36)
+                    }
 
                     Image(systemName: isSelected ? tab.iconFilled : tab.icon)
-                        .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
-                        .foregroundColor(isSelected ? .white : .gray)
+                        .font(.system(size: 18, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(
+                            isSelected
+                                ? (theme.isDarkMode ? .white : .black)
+                                : (theme.isDarkMode ? .gray : .gray)
+                        )
                 }
+                .frame(height: 36)
 
                 Text(tab.title)
-                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .white : .gray)
+                    .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(
+                        isSelected
+                            ? (theme.isDarkMode ? .white : .black)
+                            : .gray
+                    )
             }
             .frame(maxWidth: .infinity)
         }

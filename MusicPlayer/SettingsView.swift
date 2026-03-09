@@ -14,7 +14,6 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    // Заголовок
                     HStack {
                         Text("Настройки")
                             .font(.system(size: 28, weight: .heavy))
@@ -25,41 +24,36 @@ struct SettingsView: View {
                     .padding(.top, 10)
                     .padding(.bottom, 24)
 
-                    // Профиль
                     ProfileCard(isDark: theme.isDarkMode)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 24)
 
-                    // Секция: Воспроизведение
                     SettingsSection(title: "Воспроизведение", isDark: theme.isDarkMode) {
-                        SettingsToggleRow(icon: "play.circle", iconColor: "#8E8E93", title: "Автовоспроизведение", isOn: $autoPlay, isDark: theme.isDarkMode)
+                        SettingsToggleRow(icon: "play.circle", iconColor: "#34C759", title: "Автовоспроизведение", isOn: $autoPlay, isDark: theme.isDarkMode)
                         SettingsDivider(isDark: theme.isDarkMode)
-                        SettingsToggleRow(icon: "arrow.right.arrow.left", iconColor: "#8E8E93", title: "Кроссфейд", isOn: $crossfade, isDark: theme.isDarkMode)
+                        SettingsToggleRow(icon: "arrow.right.arrow.left", iconColor: "#007AFF", title: "Кроссфейд", isOn: $crossfade, isDark: theme.isDarkMode)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
 
-                    // Секция: Качество
                     SettingsSection(title: "Качество загрузки", isDark: theme.isDarkMode) {
                         QualityPicker(selected: $downloadQuality, isDark: theme.isDarkMode)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
 
-                    // Секция: Приложение
                     SettingsSection(title: "Приложение", isDark: theme.isDarkMode) {
-                        SettingsToggleRow(icon: "moon.fill", iconColor: "#8E8E93", title: "Тёмная тема", isOn: $theme.isDarkMode, isDark: theme.isDarkMode)
+                        SettingsToggleRow(icon: "moon.fill", iconColor: "#5856D6", title: "Тёмная тема", isOn: $theme.isDarkMode, isDark: theme.isDarkMode)
                         SettingsDivider(isDark: theme.isDarkMode)
-                        SettingsToggleRow(icon: "bell.fill", iconColor: "#8E8E93", title: "Уведомления", isOn: $notifications, isDark: theme.isDarkMode)
+                        SettingsToggleRow(icon: "bell.fill", iconColor: "#FF9500", title: "Уведомления", isOn: $notifications, isDark: theme.isDarkMode)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
 
-                    // Секция: О приложении
                     SettingsSection(title: "О приложении", isDark: theme.isDarkMode) {
-                        SettingsInfoRow(icon: "info.circle", iconColor: "#8E8E93", title: "Версия", value: "1.0.0", isDark: theme.isDarkMode)
+                        SettingsInfoRow(icon: "info.circle", iconColor: "#007AFF", title: "Версия", value: "1.0.0", isDark: theme.isDarkMode)
                         SettingsDivider(isDark: theme.isDarkMode)
-                        SettingsInfoRow(icon: "swift", iconColor: "#8E8E93", title: "Платформа", value: "SwiftUI", isDark: theme.isDarkMode)
+                        SettingsInfoRow(icon: "swift", iconColor: "#FF6B35", title: "Платформа", value: "SwiftUI", isDark: theme.isDarkMode)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
@@ -76,11 +70,10 @@ struct ProfileCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Аватар
             ZStack {
                 Circle()
                     .fill(
-                        LinearGradient(colors: [Color(hex: "#48484A"), Color(hex: "#3A3A3C")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        LinearGradient(colors: [Color(hex: "#5856D6"), Color(hex: "#AF52DE")], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .frame(width: 56, height: 56)
 
@@ -158,7 +151,7 @@ struct SettingsToggleRow: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: iconColor).opacity(isDark ? 0.15 : 0.1))
+                    .fill(Color(hex: iconColor).opacity(isDark ? 0.2 : 0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 15))
@@ -172,7 +165,7 @@ struct SettingsToggleRow: View {
             Spacer()
 
             Toggle("", isOn: $isOn)
-                .tint(Color(hex: "#636366"))
+                .tint(Color(hex: "#5856D6"))
                 .labelsHidden()
         }
         .padding(.horizontal, 16)
@@ -191,7 +184,7 @@ struct SettingsInfoRow: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: iconColor).opacity(isDark ? 0.15 : 0.1))
+                    .fill(Color(hex: iconColor).opacity(isDark ? 0.2 : 0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 15))
@@ -241,7 +234,7 @@ struct QualityPicker: View {
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(selected == i ? Color(hex: "#48484A") : Color.clear)
+                                .fill(selected == i ? Color(hex: "#5856D6") : Color.clear)
                         )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -253,5 +246,4 @@ struct QualityPicker: View {
 
 #Preview {
     SettingsView(theme: ThemeManager())
-        .preferredColorScheme(.dark)
 }
