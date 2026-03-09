@@ -20,25 +20,27 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     @Published var isImporting: Bool = false
     @Published var showFullPlayer: Bool = false
 
-    // Pitch / Speed
+    // Speed (slowed / speed up — pitch changes with speed like vinyl)
     @Published var playbackRate: Float = 1.0
-    @Published var pitchShift: Float = 0 // in cents (-1200 to +1200)
     @Published var showPitchPicker: Bool = false
 
-    // Slider drag states (prevents timer from fighting with user)
+    // Slider drag state
     @Published var isDraggingProgress: Bool = false
 
-    // System volume (read-only, observed)
+    // System volume (observed)
     @Published var systemVolume: Float = 0.5
 
     // MARK: - AVAudioEngine
     private var audioEngine = AVAudioEngine()
     private var playerNode = AVAudioPlayerNode()
-    private var timePitchNode = AVAudioUnitTimePitch()
+    private var varispeedNode = AVAudioUnitVarispeed() // Changes speed AND pitch together
     private var audioFile: AVAudioFile?
     private var seekFrame: AVAudioFramePosition = 0
     private var audioLengthFrames: AVAudioFramePosition = 0
     private var audioSampleRate: Double = 44100
+
+    // Generation counter to prevent stale completion handlers from firing
+    private var playbackGeneration: Int = 0
 
     private var timer: Timer?
     private var volumeObserver: NSKeyValueObservation?
@@ -84,14 +86,14 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     private func setupAudioEngine() {
         audioEngine.attach(playerNode)
-        audioEngine.attach(timePitchNode)
+        audioEngine.attach(varispeedNode)
 
-        // playerNode -> timePitch -> mainMixer -> output
-        audioEngine.connect(playerNode, to: timePitchNode, format: nil)
-        audioEngine.connect(timePitchNode, to: audioEngine.mainMixerNode, format: nil)
+        // playerNode -> varispeed -> mainMixer -> output
+        audioEngine.connect(playerNode, to: varispeedNode, format: nil)
+        audioEngine.connect(varispeedNode, to: audioEngine.mainMixerNode, format: nil)
     }
 
-    // MARK: - System Volume Observation
+    // MARK: - System Volume
 
     private func observeSystemVolume() {
         let session = AVAudioSession.sharedInstance()
@@ -102,30 +104,25 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Remote Command Center (Lock Screen / Control Center)
+    // MARK: - Remote Commands (Lock Screen / Control Center)
 
     private func setupRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
 
         center.playCommand.addTarget { [weak self] _ in
-            self?.play()
-            return .success
+            self?.play(); return .success
         }
         center.pauseCommand.addTarget { [weak self] _ in
-            self?.pause()
-            return .success
+            self?.pause(); return .success
         }
         center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            self?.togglePlay()
-            return .success
+            self?.togglePlay(); return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
-            self?.nextTrack()
-            return .success
+            self?.nextTrack(); return .success
         }
         center.previousTrackCommand.addTarget { [weak self] _ in
-            self?.previousTrack()
-            return .success
+            self?.previousTrack(); return .success
         }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let self = self,
@@ -164,7 +161,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     private var musicDirectory: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let musicDir = docs.appendingPathComponent("ImportedMusic", isDirectory: true)
+        let musicDir = docs.appendingPathComponent("Music", isDirectory: true)
         if !FileManager.default.fileExists(atPath: musicDir.path) {
             try? FileManager.default.createDirectory(at: musicDir, withIntermediateDirectories: true)
         }
@@ -176,32 +173,29 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-
             var newTracks: [Track] = []
 
             for url in urls {
                 let didStartAccessing = url.startAccessingSecurityScopedResource()
                 defer {
-                    if didStartAccessing {
-                        url.stopAccessingSecurityScopedResource()
-                    }
+                    if didStartAccessing { url.stopAccessingSecurityScopedResource() }
                 }
 
-                let destinationURL = self.musicDirectory.appendingPathComponent(url.lastPathComponent)
+                let destURL = self.musicDirectory.appendingPathComponent(url.lastPathComponent)
 
-                if !FileManager.default.fileExists(atPath: destinationURL.path) {
+                if !FileManager.default.fileExists(atPath: destURL.path) {
                     do {
-                        try FileManager.default.copyItem(at: url, to: destinationURL)
+                        try FileManager.default.copyItem(at: url, to: destURL)
                     } catch {
-                        print("Failed to copy file: \(error.localizedDescription)")
+                        print("Copy failed: \(error.localizedDescription)")
                         continue
                     }
                 }
 
-                let alreadyExists = self.tracks.contains { $0.fileURL.lastPathComponent == destinationURL.lastPathComponent }
+                let alreadyExists = self.tracks.contains { $0.fileURL.lastPathComponent == destURL.lastPathComponent }
                 if alreadyExists { continue }
 
-                if let track = Track.fromFile(url: destinationURL) {
+                if let track = Track.fromFile(url: destURL) {
                     newTracks.append(track)
                 }
             }
@@ -223,77 +217,53 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     private func loadSavedTracks() {
         guard let fileNames = UserDefaults.standard.stringArray(forKey: savedTracksKey) else { return }
-
-        var loadedTracks: [Track] = []
-        for fileName in fileNames {
-            let fileURL = musicDirectory.appendingPathComponent(fileName)
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                if let track = Track.fromFile(url: fileURL) {
-                    loadedTracks.append(track)
-                }
+        var loaded: [Track] = []
+        for name in fileNames {
+            let url = musicDirectory.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path),
+               let track = Track.fromFile(url: url) {
+                loaded.append(track)
             }
         }
-        tracks = loadedTracks
+        tracks = loaded
     }
 
     // MARK: - Track Management
 
     func removeTrack(at indexSet: IndexSet) {
         for index in indexSet {
-            let track = tracks[index]
-            try? FileManager.default.removeItem(at: track.fileURL)
+            try? FileManager.default.removeItem(at: tracks[index].fileURL)
         }
-
         let removingCurrent = indexSet.contains(currentTrackIndex)
         tracks.remove(atOffsets: indexSet)
         saveTrackList()
 
         if removingCurrent {
             stop()
-            if !tracks.isEmpty {
-                currentTrackIndex = min(currentTrackIndex, tracks.count - 1)
-            } else {
-                currentTrackIndex = 0
-            }
+            currentTrackIndex = tracks.isEmpty ? 0 : min(currentTrackIndex, tracks.count - 1)
         } else if currentTrackIndex >= tracks.count {
             currentTrackIndex = max(0, tracks.count - 1)
         }
     }
 
     func removeTrack(track: Track) {
-        if let index = tracks.firstIndex(where: { $0.id == track.id }) {
-            removeTrack(at: IndexSet(integer: index))
-        }
-    }
-
-    func moveTrack(from source: IndexSet, to destination: Int) {
-        let currentTrack = self.currentTrack
-        tracks.move(fromOffsets: source, toOffset: destination)
-        saveTrackList()
-        if let current = currentTrack,
-           let newIndex = tracks.firstIndex(where: { $0.id == current.id }) {
-            currentTrackIndex = newIndex
+        if let i = tracks.firstIndex(where: { $0.id == track.id }) {
+            removeTrack(at: IndexSet(integer: i))
         }
     }
 
     // MARK: - Playback Controls
 
     func togglePlay() {
-        if isPlaying {
-            pause()
-        } else {
-            play()
-        }
+        isPlaying ? pause() : play()
     }
 
     func play() {
         guard hasTracks else { return }
 
+        // Resume if paused
         if audioFile != nil && !isPlaying {
-            // Resume
-            if !audioEngine.isRunning {
-                try? audioEngine.start()
-            }
+            if !audioEngine.isRunning { try? audioEngine.start() }
             playerNode.play()
             isPlaying = true
             startTimer()
@@ -313,8 +283,9 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     }
 
     func stop() {
+        playbackGeneration += 1 // Invalidate any pending completion handlers
         playerNode.stop()
-        audioEngine.stop()
+        if audioEngine.isRunning { audioEngine.stop() }
         audioFile = nil
         isPlaying = false
         stopTimer()
@@ -327,23 +298,15 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     func nextTrack() {
         guard hasTracks else { return }
 
-        if isShuffle {
-            var newIndex: Int
-            if tracks.count > 1 {
-                repeat {
-                    newIndex = Int.random(in: 0..<tracks.count)
-                } while newIndex == currentTrackIndex
-            } else {
-                newIndex = 0
-            }
-            currentTrackIndex = newIndex
+        if isShuffle && tracks.count > 1 {
+            var idx: Int
+            repeat { idx = Int.random(in: 0..<tracks.count) } while idx == currentTrackIndex
+            currentTrackIndex = idx
         } else {
             currentTrackIndex = (currentTrackIndex + 1) % tracks.count
         }
 
-        if let track = currentTrack {
-            loadAndPlay(track: track)
-        }
+        if let track = currentTrack { loadAndPlay(track: track) }
     }
 
     func previousTrack() {
@@ -354,23 +317,15 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
             return
         }
 
-        if isShuffle {
-            var newIndex: Int
-            if tracks.count > 1 {
-                repeat {
-                    newIndex = Int.random(in: 0..<tracks.count)
-                } while newIndex == currentTrackIndex
-            } else {
-                newIndex = 0
-            }
-            currentTrackIndex = newIndex
+        if isShuffle && tracks.count > 1 {
+            var idx: Int
+            repeat { idx = Int.random(in: 0..<tracks.count) } while idx == currentTrackIndex
+            currentTrackIndex = idx
         } else {
             currentTrackIndex = (currentTrackIndex - 1 + tracks.count) % tracks.count
         }
 
-        if let track = currentTrack {
-            loadAndPlay(track: track)
-        }
+        if let track = currentTrack { loadAndPlay(track: track) }
     }
 
     func selectTrack(at index: Int) {
@@ -381,71 +336,62 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     func seek(to fraction: Double) {
         guard audioFile != nil else { return }
-        let targetFrame = AVAudioFramePosition(Double(audioLengthFrames) * fraction)
-        seekToFrame(targetFrame)
+        let frame = AVAudioFramePosition(Double(audioLengthFrames) * max(0, min(1, fraction)))
+        seekToFrame(frame)
     }
 
     func seekToTime(_ time: TimeInterval) {
         guard audioFile != nil else { return }
-        let targetFrame = AVAudioFramePosition(time * audioSampleRate)
-        seekToFrame(min(targetFrame, audioLengthFrames))
+        let frame = AVAudioFramePosition(time * audioSampleRate)
+        seekToFrame(min(max(0, frame), audioLengthFrames))
     }
 
     private func seekToFrame(_ frame: AVAudioFramePosition) {
-        guard let audioFile = audioFile else { return }
+        guard let file = audioFile else { return }
 
         let wasPlaying = isPlaying
-        playerNode.stop()
+        playerNode.stop() // Don't increment generation here — we want to reschedule
 
-        let clampedFrame = max(0, min(frame, audioLengthFrames))
-        seekFrame = clampedFrame
+        let clamped = max(0, min(frame, audioLengthFrames))
+        seekFrame = clamped
 
-        let remainingFrames = AVAudioFrameCount(audioLengthFrames - clampedFrame)
-        guard remainingFrames > 0 else {
-            // End of track
-            handleTrackFinished()
+        let remaining = AVAudioFrameCount(audioLengthFrames - clamped)
+        guard remaining > 0 else {
+            onTrackFinished()
             return
         }
 
-        playerNode.scheduleSegment(audioFile, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil) { [weak self] in
+        let gen = playbackGeneration
+        playerNode.scheduleSegment(file, startingFrame: clamped, frameCount: remaining, at: nil) { [weak self] in
             DispatchQueue.main.async {
-                self?.handleTrackFinished()
+                guard let self = self, self.playbackGeneration == gen else { return }
+                self.onTrackFinished()
             }
         }
 
         if wasPlaying {
-            if !audioEngine.isRunning {
-                try? audioEngine.start()
-            }
+            if !audioEngine.isRunning { try? audioEngine.start() }
             playerNode.play()
         }
 
-        // Update UI immediately
-        let newTime = Double(clampedFrame) / audioSampleRate
-        currentTime = newTime
-        if duration > 0 {
-            progress = newTime / duration
-        }
+        currentTime = Double(clamped) / audioSampleRate
+        if duration > 0 { progress = currentTime / duration }
         updateNowPlayingInfo()
     }
 
-    // MARK: - Pitch / Speed
+    // MARK: - Speed (Slowed / Speed Up)
 
     func setPlaybackRate(_ rate: Float) {
         playbackRate = rate
-        timePitchNode.rate = rate
+        varispeedNode.rate = rate
         updateNowPlayingInfo()
     }
 
-    func setPitchShift(_ cents: Float) {
-        pitchShift = cents
-        timePitchNode.pitch = cents
-    }
-
-    /// Preset speed options
+    /// Presets for slowed / speed up
     static let speedPresets: [(String, Float)] = [
         ("0.5x", 0.5),
         ("0.75x", 0.75),
+        ("0.85x", 0.85),
         ("1.0x", 1.0),
         ("1.25x", 1.25),
         ("1.5x", 1.5),
@@ -456,17 +402,17 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     private func loadAndPlay(track: Track) {
         stopTimer()
+        playbackGeneration += 1 // Invalidate old completion handlers
         playerNode.stop()
-        audioEngine.stop()
+        if audioEngine.isRunning { audioEngine.stop() }
         audioFile = nil
         progress = 0
         currentTime = 0
         duration = 0
         seekFrame = 0
 
-        let url = track.fileURL
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            print("File not found: \(url.path)")
+        guard FileManager.default.fileExists(atPath: track.fileURL.path) else {
+            print("File not found: \(track.fileURL.path)")
             isPlaying = false
             return
         }
@@ -474,7 +420,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         do {
             setupAudioSession()
 
-            let file = try AVAudioFile(forReading: url)
+            let file = try AVAudioFile(forReading: track.fileURL)
             audioFile = file
             audioLengthFrames = file.length
             audioSampleRate = file.processingFormat.sampleRate
@@ -482,17 +428,18 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
             // Reconnect with correct format
             audioEngine.disconnectNodeOutput(playerNode)
-            audioEngine.disconnectNodeOutput(timePitchNode)
-            audioEngine.connect(playerNode, to: timePitchNode, format: file.processingFormat)
-            audioEngine.connect(timePitchNode, to: audioEngine.mainMixerNode, format: file.processingFormat)
+            audioEngine.disconnectNodeOutput(varispeedNode)
+            audioEngine.connect(playerNode, to: varispeedNode, format: file.processingFormat)
+            audioEngine.connect(varispeedNode, to: audioEngine.mainMixerNode, format: file.processingFormat)
 
-            // Apply current pitch/speed settings
-            timePitchNode.rate = playbackRate
-            timePitchNode.pitch = pitchShift
+            varispeedNode.rate = playbackRate
 
+            let gen = playbackGeneration
             playerNode.scheduleFile(file, at: nil) { [weak self] in
                 DispatchQueue.main.async {
-                    self?.handleTrackFinished()
+                    // Only handle if this is still the current generation
+                    guard let self = self, self.playbackGeneration == gen else { return }
+                    self.onTrackFinished()
                 }
             }
 
@@ -508,14 +455,11 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         }
     }
 
-    private func handleTrackFinished() {
+    private func onTrackFinished() {
         guard isPlaying else { return }
-
         if isRepeat {
             seekToFrame(0)
-            if !audioEngine.isRunning {
-                try? audioEngine.start()
-            }
+            if !audioEngine.isRunning { try? audioEngine.start() }
             playerNode.play()
             isPlaying = true
             startTimer()
@@ -529,22 +473,17 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self,
+            guard let self = self, !self.isDraggingProgress,
                   let nodeTime = self.playerNode.lastRenderTime,
                   let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) else { return }
 
-            // Don't update while user is dragging
-            if self.isDraggingProgress { return }
-
-            let currentFrame = self.seekFrame + playerTime.sampleTime
-            let time = Double(currentFrame) / self.audioSampleRate
+            let frame = self.seekFrame + playerTime.sampleTime
+            let time = Double(frame) / self.audioSampleRate
             let dur = self.duration
 
             DispatchQueue.main.async {
                 self.currentTime = max(0, min(time, dur))
-                if dur > 0 {
-                    self.progress = self.currentTime / dur
-                }
+                if dur > 0 { self.progress = self.currentTime / dur }
             }
         }
     }

@@ -412,12 +412,13 @@ struct FullPlayerView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
-                .padding(.bottom, 12)
+                .padding(.bottom, 8)
 
-                // Album Art
+                // Album Art — larger, less horizontal padding
                 FullPlayerArtwork(track: vm.currentTrack)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, 20)
+
+                Spacer().frame(height: 20)
 
                 // Track info + pitch button
                 HStack(alignment: .top) {
@@ -440,24 +441,23 @@ struct FullPlayerView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .padding(.bottom, 16)
 
                 // Progress slider
                 FullProgressBar(vm: vm)
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 20)
 
                 // Controls
                 FullControlsView(vm: vm)
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 20)
 
                 // Volume (system)
                 SystemVolumeSlider()
                     .frame(height: 30)
                     .padding(.horizontal, 32)
-
-                Spacer()
+                    .padding(.bottom, 16)
             }
         }
         .sheet(isPresented: $vm.showPitchPicker) {
