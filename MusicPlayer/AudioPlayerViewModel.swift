@@ -75,9 +75,13 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     private func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
+            // Use .playback category without options for exclusive audio playback
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true, options: [])
             systemVolume = session.outputVolume
+            
+            // Enable background audio
+            UIApplication.shared.beginReceivingRemoteControlEvents()
         } catch {
             print("AudioSession error: \(error.localizedDescription)")
         }
@@ -158,6 +162,9 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         // playerNode -> varispeed -> mainMixer -> output
         audioEngine.connect(playerNode, to: varispeedNode, format: nil)
         audioEngine.connect(varispeedNode, to: audioEngine.mainMixerNode, format: nil)
+        
+        // Prepare engine for background playback
+        audioEngine.prepare()
     }
 
     // MARK: - System Volume
@@ -518,6 +525,10 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
             }
 
             try audioEngine.start()
+            
+            // Ensure engine stays running in background
+            audioEngine.mainMixerNode.outputVolume = 1.0
+            
             playerNode.play()
 
             isPlaying = true
