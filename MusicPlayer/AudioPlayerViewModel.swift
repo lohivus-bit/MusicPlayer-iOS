@@ -66,6 +66,7 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         setupAudioEngine()
         setupRemoteCommands()
         observeSystemVolume()
+        setupBackgroundAudioHandling()
         loadSavedTracks()
     }
 
@@ -79,6 +80,72 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
             systemVolume = session.outputVolume
         } catch {
             print("AudioSession error: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Background Audio Handling
+    
+    private func setupBackgroundAudioHandling() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+    }
+    
+    @objc private func handleAudioSessionInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+        
+        switch type {
+        case .began:
+            // Interruption began - pause playback
+            if isPlaying {
+                pause()
+            }
+        case .ended:
+            // Interruption ended - resume if needed
+            guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+            if options.contains(.shouldResume) {
+                // Reactivate audio session and resume
+                try? AVAudioSession.sharedInstance().setActive(true)
+                if !audioEngine.isRunning {
+                    try? audioEngine.start()
+                }
+                play()
+            }
+        @unknown default:
+            break
+        }
+    }
+    
+    @objc private func handleRouteChange(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+            return
+        }
+        
+        switch reason {
+        case .oldDeviceUnavailable:
+            // Headphones unplugged - pause
+            if isPlaying {
+                pause()
+            }
+        default:
+            break
         }
     }
 
@@ -261,9 +328,14 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     func play() {
         guard hasTracks else { return }
 
+        // Ensure audio session is active
+        try? AVAudioSession.sharedInstance().setActive(true)
+        
         // Resume if paused
         if audioFile != nil && !isPlaying {
-            if !audioEngine.isRunning { try? audioEngine.start() }
+            if !audioEngine.isRunning { 
+                try? audioEngine.start()
+            }
             playerNode.play()
             isPlaying = true
             startTimer()
