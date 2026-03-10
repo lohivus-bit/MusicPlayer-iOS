@@ -404,7 +404,7 @@ struct FullPlayerView: View {
                     // Speed indicator - always visible
                     Text(String(format: "%.1fx", vm.playbackRate))
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color(hex: "#5856D6"))
+                        .foregroundColor(theme.isDarkMode ? Color(hex: "#5856D6") : .black)
                         .opacity(vm.playbackRate != 1.0 ? 1.0 : 0.5)
                 }
                 .padding(.horizontal, 24)
@@ -455,6 +455,7 @@ struct FullPlayerView: View {
                     .frame(height: 30)
                     .padding(.horizontal, 32)
                     .padding(.bottom, 16)
+                    .environmentObject(theme)
             }
         }
         .sheet(isPresented: $vm.showPitchPicker) {
@@ -616,19 +617,31 @@ struct FullControlsView: View {
 
 // MARK: - System Volume Slider (uses MPVolumeView)
 struct SystemVolumeSlider: UIViewRepresentable {
+    @EnvironmentObject var theme: ThemeManager
+    
     func makeUIView(context: Context) -> MPVolumeView {
         let volumeView = MPVolumeView(frame: .zero)
         volumeView.showsRouteButton = true
-        volumeView.setVolumeThumbImage(UIImage(), for: .normal) // Hide default thumb, use slider track
-        // Style the slider
-        if let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
-            slider.minimumTrackTintColor = .white
-            slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.15)
-        }
+        volumeView.setVolumeThumbImage(UIImage(), for: .normal)
+        updateSliderColors(volumeView)
         return volumeView
     }
 
-    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {
+        updateSliderColors(uiView)
+    }
+    
+    private func updateSliderColors(_ volumeView: MPVolumeView) {
+        if let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
+            if theme.isDarkMode {
+                slider.minimumTrackTintColor = .white
+                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.15)
+            } else {
+                slider.minimumTrackTintColor = .black
+                slider.maximumTrackTintColor = UIColor.black.withAlphaComponent(0.15)
+            }
+        }
+    }
 }
 
 // MARK: - Speed Picker
