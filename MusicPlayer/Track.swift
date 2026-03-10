@@ -25,80 +25,47 @@ struct Track: Identifiable, Equatable {
     // MARK: - Create Track from file URL by extracting ID3 metadata
     static func fromFile(url: URL) -> Track? {
         let asset = AVURLAsset(url: url)
+        let metadata = asset.commonMetadata
         
-        // Load metadata from both asset and track
-        let assetMetadata = asset.commonMetadata
-        var allMetadata = assetMetadata
-        if let audioTrack = asset.tracks(withMediaType: .audio).first {
-            allMetadata += audioTrack.commonMetadata
+        // Extract title
+        var title: String?
+        for item in AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierTitle) {
+            title = item.stringValue
+            break
+        }
+        if title == nil {
+            title = url.deletingPathExtension().lastPathComponent
         }
 
-        // Extract title - try multiple formats
-        var titleItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierTitle)
-        if titleItems.isEmpty {
-            titleItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyTitleDescription, keySpace: .id3)
+        // Extract artist
+        var artist: String?
+        for item in AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtist) {
+            artist = item.stringValue
+            break
         }
-        if titleItems.isEmpty {
-            titleItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyTitle, keySpace: .iTunes)
+        if artist == nil {
+            artist = "Неизвестный исполнитель"
         }
-        let title = titleItems.first?.stringValue ?? url.deletingPathExtension().lastPathComponent
 
-        // Extract artist - try multiple formats
-        var artistItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierArtist)
-        if artistItems.isEmpty {
-            artistItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyLeadPerformer, keySpace: .id3)
+        // Extract album name
+        var albumName: String?
+        for item in AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierAlbumName) {
+            albumName = item.stringValue
+            break
         }
-        if artistItems.isEmpty {
-            artistItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyArtist, keySpace: .iTunes)
+        if albumName == nil {
+            albumName = "Неизвестный альбом"
         }
-        let artist = artistItems.first?.stringValue ?? "Неизвестный исполнитель"
 
-        // Extract album name - try multiple formats
-        var albumItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierAlbumName)
-        if albumItems.isEmpty {
-            albumItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyAlbumTitle, keySpace: .id3)
-        }
-        if albumItems.isEmpty {
-            albumItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyAlbum, keySpace: .iTunes)
-        }
-        let albumName = albumItems.first?.stringValue ?? "Неизвестный альбом"
-
-        // Extract artwork - try multiple formats and methods
+        // Extract artwork
         var artworkData: Data? = nil
-        
-        // Try common identifier first
-        var artworkItems = AVMetadataItem.metadataItems(from: allMetadata, filteredByIdentifier: .commonIdentifierArtwork)
-        if let artworkItem = artworkItems.first {
-            if let data = artworkItem.dataValue {
+        for item in AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: .commonIdentifierArtwork) {
+            if let data = item.dataValue {
                 artworkData = data
-            } else if let data = artworkItem.value as? Data {
+                break
+            } else if let data = item.value as? Data {
                 artworkData = data
-            } else if let dict = artworkItem.value as? NSDictionary, let data = dict["data"] as? Data {
-                artworkData = data
-            }
-        }
-        
-        // Try ID3 format
-        if artworkData == nil {
-            artworkItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.id3MetadataKeyAttachedPicture, keySpace: .id3)
-            if let artworkItem = artworkItems.first {
-                if let data = artworkItem.dataValue {
-                    artworkData = data
-                } else if let data = artworkItem.value as? Data {
-                    artworkData = data
-                }
-            }
-        }
-        
-        // Try iTunes format
-        if artworkData == nil {
-            artworkItems = AVMetadataItem.metadataItems(from: allMetadata, withKey: AVMetadataKey.iTunesMetadataKeyCoverArt, keySpace: .iTunes)
-            if let artworkItem = artworkItems.first {
-                if let data = artworkItem.dataValue {
-                    artworkData = data
-                } else if let data = artworkItem.value as? Data {
-                    artworkData = data
-                }
+                break
             }
         }
 
@@ -108,9 +75,9 @@ struct Track: Identifiable, Equatable {
 
         return Track(
             id: UUID(),
-            title: title,
-            artist: artist,
-            albumName: albumName,
+            title: title ?? url.deletingPathExtension().lastPathComponent,
+            artist: artist ?? "Неизвестный исполнитель",
+            albumName: albumName ?? "Неизвестный альбом",
             duration: validDuration,
             artworkData: artworkData,
             fileURL: url
