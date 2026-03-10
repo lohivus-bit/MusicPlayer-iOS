@@ -5,7 +5,7 @@ import Combine
 import UIKit
 import UniformTypeIdentifiers
 
-class AudioPlayerViewModel: NSObject, ObservableObject {
+class AudioPlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: - Published Properties
     @Published var tracks: [Track] = []
@@ -30,18 +30,8 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     // System volume (observed)
     @Published var systemVolume: Float = 0.5
 
-    // MARK: - AVAudioEngine
-    private var audioEngine = AVAudioEngine()
-    private var playerNode = AVAudioPlayerNode()
-    private var varispeedNode = AVAudioUnitVarispeed() // Changes speed AND pitch together
-    private var audioFile: AVAudioFile?
-    private var seekFrame: AVAudioFramePosition = 0
-    private var audioLengthFrames: AVAudioFramePosition = 0
-    private var audioSampleRate: Double = 44100
-
-    // Generation counter to prevent stale completion handlers from firing
-    private var playbackGeneration: Int = 0
-
+    // MARK: - AVAudioPlayer (works in background!)
+    private var audioPlayer: AVAudioPlayer?
     private var timer: Timer?
     private var volumeObserver: NSKeyValueObservation?
 
@@ -63,7 +53,6 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     override init() {
         super.init()
         setupAudioSession()
-        setupAudioEngine()
         setupRemoteCommands()
         observeSystemVolume()
         setupBackgroundAudioHandling()
@@ -75,12 +64,10 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     private func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            // Use .playback category without options for exclusive audio playback
             try session.setCategory(.playback, mode: .default)
-            try session.setActive(true, options: [])
+            try session.setActive(true)
             systemVolume = session.outputVolume
             
-            // Enable background audio
             UIApplication.shared.beginReceivingRemoteControlEvents()
         } catch {
             print("AudioSession error: \(error.localizedDescription)")
@@ -114,20 +101,14 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         
         switch type {
         case .began:
-            // Interruption began - pause playback
             if isPlaying {
                 pause()
             }
         case .ended:
-            // Interruption ended - resume if needed
             guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
-                // Reactivate audio session and resume
                 try? AVAudioSession.sharedInstance().setActive(true)
-                if !audioEngine.isRunning {
-                    try? audioEngine.start()
-                }
                 play()
             }
         @unknown default:
@@ -144,27 +125,12 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         
         switch reason {
         case .oldDeviceUnavailable:
-            // Headphones unplugged - pause
             if isPlaying {
                 pause()
             }
         default:
             break
         }
-    }
-
-    // MARK: - Audio Engine Setup
-
-    private func setupAudioEngine() {
-        audioEngine.attach(playerNode)
-        audioEngine.attach(varispeedNode)
-
-        // playerNode -> varispeed -> mainMixer -> output
-        audioEngine.connect(playerNode, to: varispeedNode, format: nil)
-        audioEngine.connect(varispeedNode, to: audioEngine.mainMixerNode, format: nil)
-        
-        // Prepare engine for background playback
-        audioEngine.prepare()
     }
 
     // MARK: - System Volume
@@ -335,15 +301,10 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     func play() {
         guard hasTracks else { return }
 
-        // Ensure audio session is active
         try? AVAudioSession.sharedInstance().setActive(true)
         
-        // Resume if paused
-        if audioFile != nil && !isPlaying {
-            if !audioEngine.isRunning { 
-                try? audioEngine.start()
-            }
-            playerNode.play()
+        if let player = audioPlayer, !isPlaying {
+            player.play()
             isPlaying = true
             startTimer()
             updateNowPlayingInfo()
@@ -355,17 +316,15 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     }
 
     func pause() {
-        playerNode.pause()
+        audioPlayer?.pause()
         isPlaying = false
         stopTimer()
         updateNowPlayingInfo()
     }
 
     func stop() {
-        playbackGeneration += 1 // Invalidate any pending completion handlers
-        playerNode.stop()
-        if audioEngine.isRunning { audioEngine.stop() }
-        audioFile = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
         isPlaying = false
         stopTimer()
         progress = 0
@@ -414,48 +373,15 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     }
 
     func seek(to fraction: Double) {
-        guard audioFile != nil else { return }
-        let frame = AVAudioFramePosition(Double(audioLengthFrames) * max(0, min(1, fraction)))
-        seekToFrame(frame)
+        guard let player = audioPlayer else { return }
+        let time = player.duration * fraction
+        seekToTime(time)
     }
 
     func seekToTime(_ time: TimeInterval) {
-        guard audioFile != nil else { return }
-        let frame = AVAudioFramePosition(time * audioSampleRate)
-        seekToFrame(min(max(0, frame), audioLengthFrames))
-    }
-
-    private func seekToFrame(_ frame: AVAudioFramePosition) {
-        guard let file = audioFile else { return }
-
-        let wasPlaying = isPlaying
-        playerNode.stop()
-
-        let clamped = max(0, min(frame, audioLengthFrames))
-        seekFrame = clamped
-
-        let remaining = AVAudioFrameCount(audioLengthFrames - clamped)
-        guard remaining > 0 else {
-            onTrackFinished()
-            return
-        }
-
-        playbackGeneration += 1
-        let gen = playbackGeneration
-        playerNode.scheduleSegment(file, startingFrame: clamped, frameCount: remaining, at: nil) { [weak self] in
-            DispatchQueue.main.async {
-                guard let self = self, self.playbackGeneration == gen else { return }
-                self.onTrackFinished()
-            }
-        }
-
-        if wasPlaying {
-            if !audioEngine.isRunning { try? audioEngine.start() }
-            playerNode.play()
-            isPlaying = true
-        }
-
-        currentTime = Double(clamped) / audioSampleRate
+        guard let player = audioPlayer else { return }
+        player.currentTime = max(0, min(time, player.duration))
+        currentTime = player.currentTime
         if duration > 0 { progress = currentTime / duration }
         updateNowPlayingInfo()
     }
@@ -464,11 +390,11 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     func setPlaybackRate(_ rate: Float) {
         playbackRate = rate
-        varispeedNode.rate = rate
+        audioPlayer?.rate = rate
+        audioPlayer?.enableRate = true
         updateNowPlayingInfo()
     }
 
-    /// Presets for slowed / speed up
     static let speedPresets: [(String, Float)] = [
         ("0.5x", 0.5),
         ("0.75x", 0.75),
@@ -483,14 +409,11 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
 
     private func loadAndPlay(track: Track) {
         stopTimer()
-        playbackGeneration += 1 // Invalidate old completion handlers
-        playerNode.stop()
-        if audioEngine.isRunning { audioEngine.stop() }
-        audioFile = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
         progress = 0
         currentTime = 0
         duration = 0
-        seekFrame = 0
 
         guard FileManager.default.fileExists(atPath: track.fileURL.path) else {
             print("File not found: \(track.fileURL.path)")
@@ -501,51 +424,33 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
         do {
             setupAudioSession()
 
-            let file = try AVAudioFile(forReading: track.fileURL)
-            audioFile = file
-            audioLengthFrames = file.length
-            audioSampleRate = file.processingFormat.sampleRate
-            duration = Double(file.length) / audioSampleRate
-
-            // Reconnect with correct format
-            audioEngine.disconnectNodeOutput(playerNode)
-            audioEngine.disconnectNodeOutput(varispeedNode)
-            audioEngine.connect(playerNode, to: varispeedNode, format: file.processingFormat)
-            audioEngine.connect(varispeedNode, to: audioEngine.mainMixerNode, format: file.processingFormat)
-
-            varispeedNode.rate = playbackRate
-
-            let gen = playbackGeneration
-            playerNode.scheduleFile(file, at: nil) { [weak self] in
-                DispatchQueue.main.async {
-                    // Only handle if this is still the current generation
-                    guard let self = self, self.playbackGeneration == gen else { return }
-                    self.onTrackFinished()
-                }
-            }
-
-            try audioEngine.start()
+            let player = try AVAudioPlayer(contentsOf: track.fileURL)
+            player.delegate = self
+            player.enableRate = true
+            player.rate = playbackRate
+            player.prepareToPlay()
             
-            // Ensure engine stays running in background
-            audioEngine.mainMixerNode.outputVolume = 1.0
+            audioPlayer = player
+            duration = player.duration
             
-            playerNode.play()
-
+            player.play()
             isPlaying = true
             startTimer()
             updateNowPlayingInfo()
         } catch {
-            print("AudioEngine error: \(error.localizedDescription)")
+            print("AVAudioPlayer error: \(error.localizedDescription)")
             isPlaying = false
         }
     }
 
-    private func onTrackFinished() {
-        guard isPlaying else { return }
+    // MARK: - AVAudioPlayerDelegate
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard flag else { return }
+        
         if isRepeat {
-            seekToFrame(0)
-            if !audioEngine.isRunning { try? audioEngine.start() }
-            playerNode.play()
+            player.currentTime = 0
+            player.play()
             isPlaying = true
             startTimer()
         } else {
@@ -558,17 +463,13 @@ class AudioPlayerViewModel: NSObject, ObservableObject {
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self, !self.isDraggingProgress,
-                  let nodeTime = self.playerNode.lastRenderTime,
-                  let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) else { return }
-
-            let frame = self.seekFrame + playerTime.sampleTime
-            let time = Double(frame) / self.audioSampleRate
-            let dur = self.duration
+            guard let self = self, !self.isDraggingProgress, let player = self.audioPlayer else { return }
 
             DispatchQueue.main.async {
-                self.currentTime = max(0, min(time, dur))
-                if dur > 0 { self.progress = self.currentTime / dur }
+                self.currentTime = player.currentTime
+                if self.duration > 0 {
+                    self.progress = self.currentTime / self.duration
+                }
             }
         }
     }
