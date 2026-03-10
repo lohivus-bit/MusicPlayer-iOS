@@ -20,22 +20,26 @@ jobs:
     # Шаг 3 — собираем приложение
     - name: Build IPA
       run: |
-        xcodebuild \
+        xcodebuild clean \
+          -project MusicPlayer.xcodeproj \
+          -scheme MusicPlayer
+        
+        xcodebuild archive \
           -project MusicPlayer.xcodeproj \
           -scheme MusicPlayer \
           -sdk iphoneos \
           -configuration Release \
-          -derivedDataPath build \
+          -archivePath build/MusicPlayer.xcarchive \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
-          build
+          ONLY_ACTIVE_ARCH=NO
 
     # Шаг 4 — упаковываем .app в .ipa
     - name: Package IPA
       run: |
         mkdir -p Payload
-        cp -r build/Build/Products/Release-iphoneos/MusicPlayer.app Payload/
+        cp -r build/MusicPlayer.xcarchive/Products/Applications/MusicPlayer.app Payload/
         zip -r MusicPlayer.ipa Payload/
         echo "IPA создан успешно!"
 
